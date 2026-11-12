@@ -24,6 +24,32 @@ def lead_stats(conn: sqlite3.Connection) -> dict:
     }
 
 
+def event_stats(conn: sqlite3.Connection) -> dict:
+    files = conn.execute(
+        "SELECT COUNT(*), COALESCE(SUM(lines_total),0), COALESCE(SUM(malformed),0), "
+        "COALESCE(SUM(duplicates),0) FROM ingest_files WHERE kind = 'events'").fetchone()
+    return {
+        "event_files_ingested": files[0],
+        "events_total": files[1],
+        "malformed_events": files[2],
+        "duplicate_events_dropped": files[3],
+        "events_stored": conn.execute("SELECT COUNT(*) FROM events").fetchone()[0],
+    }
+
+
+def format_event_stats(s: dict) -> str:
+    lines = [
+        f"event files ingested:       {s['event_files_ingested']}",
+        f"events total (lines):       {s['events_total']}",
+        f"malformed events:           {s['malformed_events']}",
+        f"duplicate events dropped:   {s['duplicate_events_dropped']}",
+        f"events stored in ledger:    {s['events_stored']}",
+    ]
+    if s["events_total"] - s["malformed_events"] - s["duplicate_events_dropped"] != s["events_stored"]:
+        lines.append("WARNING: stored events disagree with per-file counters")
+    return "\n".join(lines)
+
+
 def format_lead_stats(s: dict) -> str:
     lines = [
         f"lead files ingested:        {s['lead_files_ingested']}",

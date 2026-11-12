@@ -34,6 +34,10 @@ class FileResult:
     rows_rejected: int = 0
     rows_merged: int = 0
     field_warnings: int = 0
+    kind: str = "leads"        # "leads" | "events"
+    lines_total: int = 0       # events only
+    malformed: int = 0
+    duplicates: int = 0
 
 
 def _parse_value(f: Field, raw: str):

@@ -10,11 +10,12 @@ from pathlib import Path
 
 from .db import PiiKeyMismatch, check_pii_fingerprint, connect, init_db, load_dispositions
 from .drops import find_drops
+from .ingest_events import ingest_drop_events
 from .ingest_leads import IngestError, ingest_drop_leads
 from .pii import load_vault
 from .schema import load_dispositions as read_dispositions
 from .schema import load_workflows
-from .stats import format_lead_stats, lead_stats
+from .stats import event_stats, format_event_stats, format_lead_stats, lead_stats
 
 DEFAULT_SCHEMAS = Path(__file__).resolve().parents[1] / "assignment-a-data" / "schemas"
 
@@ -49,9 +50,16 @@ def cmd_ingest(args) -> int:
         load_dispositions(conn, dispositions)
         exit_code = 0
         for drop in find_drops(Path(args.path)):
-            for r in ingest_drop_leads(conn, vault, workflows, drop):
+            # leads first, then events: a drop's events can link to the drop's own leads
+            results = ingest_drop_leads(conn, vault, workflows, drop)
+            results += ingest_drop_events(conn, vault, drop)
+            for r in results:
                 where = f"{r.drop_name}/{r.rel_path}"
-                if r.status == "ingested":
+                if r.status == "ingested" and r.kind == "events":
+                    stored = r.lines_total - r.malformed - r.duplicates
+                    print(f"ingested  {where}  lines={r.lines_total} malformed={r.malformed} "
+                          f"duplicates={r.duplicates} stored={stored}")
+                elif r.status == "ingested":
                     print(f"ingested  {where}  rows={r.rows_total} rejected={r.rows_rejected} "
                           f"merged={r.rows_merged} warnings={r.field_warnings}")
                 elif r.status == "skipped":
@@ -72,6 +80,7 @@ def cmd_stats(args) -> int:
     try:
         init_db(conn)
         print(format_lead_stats(lead_stats(conn)))
+        print(format_event_stats(event_stats(conn)))
         return 0
     finally:
         conn.close()
