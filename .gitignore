@@ -9,3 +9,5 @@ data_large/
 reports/
 final_state.csv
 .pytest_cache/
+.pii_key
+*.db-journal
