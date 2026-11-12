@@ -1,5 +1,7 @@
 -- Plain SQLite DDL: no STRICT, generated columns, JSON functions or WAL, so it runs on old SQLite builds.
 -- Re-runnable: everything is IF NOT EXISTS.
+-- Foreign keys to ingest_files are DEFERRABLE INITIALLY DEFERRED: a file's rows are written first
+-- and its ingest_files row last, all in one transaction, so the check happens at COMMIT.
 
 CREATE TABLE IF NOT EXISTS meta (
     key   TEXT PRIMARY KEY,
@@ -42,7 +44,7 @@ CREATE TABLE IF NOT EXISTS leads (
     workflow_id   TEXT    NOT NULL,
     phone_hash    TEXT    NOT NULL CHECK (length(phone_hash) = 64),   -- HMAC of canonical phone
     batch_id      TEXT    NOT NULL,                                   -- first file stem, never changes
-    first_file_id INTEGER NOT NULL REFERENCES ingest_files (file_id),
+    first_file_id INTEGER NOT NULL REFERENCES ingest_files (file_id) DEFERRABLE INITIALLY DEFERRED,
     external_ref  TEXT    NOT NULL CHECK (length(external_ref) > 0),
     phone_last4   TEXT    NOT NULL CHECK (length(phone_last4) = 4),
     pii_enc       BLOB    NOT NULL,                                   -- encrypted pii fields
@@ -54,7 +56,7 @@ CREATE INDEX IF NOT EXISTS ix_leads_batch ON leads (workflow_id, batch_id);
 
 -- No PII: reason and position only.
 CREATE TABLE IF NOT EXISTS lead_rejections (
-    file_id    INTEGER NOT NULL REFERENCES ingest_files (file_id),
+    file_id    INTEGER NOT NULL REFERENCES ingest_files (file_id) DEFERRABLE INITIALLY DEFERRED,
     row_number INTEGER NOT NULL CHECK (row_number >= 1),
     reason     TEXT    NOT NULL CHECK (length(reason) > 0),
     PRIMARY KEY (file_id, row_number)
@@ -73,7 +75,7 @@ CREATE TABLE IF NOT EXISTS events (
     phone_hash      TEXT CHECK (phone_hash IS NULL OR length(phone_hash) = 64),
     disposition_code TEXT,                                            -- extracted from payload at ingest
     payload         TEXT    NOT NULL,                                 -- JSON, phone removed
-    file_id         INTEGER NOT NULL REFERENCES ingest_files (file_id),
+    file_id         INTEGER NOT NULL REFERENCES ingest_files (file_id) DEFERRABLE INITIALLY DEFERRED,
     line_no         INTEGER NOT NULL CHECK (line_no >= 1)
 );
 CREATE INDEX IF NOT EXISTS ix_events_phone ON events (workflow_id, phone_hash);

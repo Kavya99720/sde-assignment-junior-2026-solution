@@ -32,6 +32,10 @@ class Workflow:
         return next(f for f in self.fields if f.reference)
 
     @property
+    def phone_field(self) -> Field:
+        return next(f for f in self.fields if f.type == "phone")
+
+    @property
     def pii_fields(self) -> tuple[Field, ...]:
         return tuple(f for f in self.fields if f.pii)
 
@@ -61,6 +65,8 @@ def _parse_workflow(doc: dict) -> Workflow:
     )
     if sum(f.reference for f in fields) != 1:
         raise ValueError(f"{doc['workflow_id']}: exactly one field must be marked reference")
+    if not next(f for f in fields if f.reference).required:
+        raise ValueError(f"{doc['workflow_id']}: the reference field must be required")
     if sum(f.type == "phone" for f in fields) != 1:
         raise ValueError(f"{doc['workflow_id']}: exactly one phone field is required")
     header_map: dict[str, Field] = {}
