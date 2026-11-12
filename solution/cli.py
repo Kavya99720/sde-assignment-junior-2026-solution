@@ -13,6 +13,7 @@ from .drops import find_drops
 from .ingest_events import ingest_drop_events
 from .ingest_leads import IngestError, ingest_drop_leads
 from .pii import load_vault
+from .report import generate_reports
 from .schema import load_dispositions as read_dispositions
 from .schema import load_workflows
 from .stats import event_stats, format_event_stats, format_lead_stats, lead_stats
@@ -35,6 +36,8 @@ def build_parser() -> argparse.ArgumentParser:
     ing = sub.add_parser("ingest", parents=[_common()], help="ingest one drop, or a folder of drop_* folders")
     ing.add_argument("path", help="a drop folder, or a parent containing drop_* folders")
     sub.add_parser("stats", parents=[_common()], help="print counts from the database")
+    rep = sub.add_parser("report", parents=[_common()], help="write the five report files")
+    rep.add_argument("--out", default="reports", help="output folder (default: reports)")
     return ap
 
 
@@ -86,11 +89,20 @@ def cmd_stats(args) -> int:
         conn.close()
 
 
+def cmd_report(args) -> int:
+    if not Path(args.db).exists():
+        print(f"error: database {args.db} does not exist", file=sys.stderr)
+        return 1
+    for p in generate_reports(Path(args.db), Path(args.out)):
+        print(f"wrote {p}")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
     args = build_parser().parse_args(argv)
     try:
-        return {"ingest": cmd_ingest, "stats": cmd_stats}[args.command](args)
+        return {"ingest": cmd_ingest, "stats": cmd_stats, "report": cmd_report}[args.command](args)
     except (IngestError, PiiKeyMismatch, FileNotFoundError, csv.Error, UnicodeDecodeError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 1
